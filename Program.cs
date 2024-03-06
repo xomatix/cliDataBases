@@ -1,4 +1,6 @@
-﻿namespace cli
+﻿using System.Net;
+
+namespace cli
 {
     internal class Program
     {
@@ -61,6 +63,24 @@
             if (instructionNumber == 3)
             {
                 var nodes = Database.FindGrandChildrenOfAGivenNode(firstArgument);
+                Console.WriteLine(string.Join(", ", nodes.Select(x => x.Name)));
+            }
+            //4. Fnds all parents of a given node
+            if (instructionNumber == 4)
+            {
+                var nodes = Database.FindParentsOfAGivenNode(firstArgument);
+                Console.WriteLine(string.Join(", ", nodes.Select(x => x.Name)));
+            }
+            //5.counts all parents of a given node,
+            if (instructionNumber == 5)
+            {
+                var nodes = Database.CountParentsOfAGivenNode(firstArgument);
+                Console.WriteLine("Parents count: "+ nodes);
+            }
+            //6. Fnds all grand parents of a given node
+            if (instructionNumber == 6)
+            {
+                var nodes = Database.FindGrandParentsOfAGivenNode(firstArgument);
                 Console.WriteLine(string.Join(", ", nodes.Select(x => x.Name)));
             }
 

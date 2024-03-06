@@ -24,10 +24,64 @@ namespace cli
             return parentNode.childrenCount;
         }
 
-        public static List<NodeModel> FindGrandChildrenOfAGivenNode(string nodeName)
+        private static NodeModel GetSingleNode(string nodeName)
         {
-            var parentNode = GetRedisValue(nodeName);
-            var grandChildrenIds = new List<int>();
+            var node = GetRedisValue(nodeName);
+            if (node != null) { return node; }
+            using (var connection = new SqliteConnection(_connectionStringSqlite))
+            {
+                connection.Open();
+                var command = connection.CreateCommand();
+
+                command.CommandText = $"SELECT * from n_node nn " +
+                    $"WHERE nn.nn_name = '{nodeName}' " +
+                    $"limit 1;";
+                Console.WriteLine(command.CommandText);
+
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var id = reader.GetInt32(0);
+                        var name = reader.GetString(1);
+                        var childCouint = reader.GetInt32(2);
+                        return new NodeModel() { ID = id, Name = name, childrenCount = childCouint };
+                    }
+                }
+            }
+            return null;
+        }
+
+        public static int CountParentsOfAGivenNode(string nodeName)
+        {
+            var childNode = GetSingleNode(nodeName);
+            List<NodeModel> nodes = new List<NodeModel>();
+            using (var connection = new SqliteConnection(_connectionStringSqlite))
+            {
+                connection.Open();
+                var command = connection.CreateCommand();
+
+                command.CommandText = $"SELECT count(*) from n_node nn " +
+                    $"join n_relation nr on (nr.nn_parent_id=nn.nn_id) " +
+                    $"WHERE nr.nn_children_id = ({childNode.ID});";
+                //Console.WriteLine(command.CommandText);
+
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var id = reader.GetInt32(0);
+                        return id;
+                    }
+                }
+            }
+
+            return 0;
+        }
+
+        public static List<NodeModel> FindGrandParentsOfAGivenNode(string nodeName)
+        {
+            var parentNode = GetSingleNode(nodeName);
             List<NodeModel> nodes = new List<NodeModel>();
             using (var connection = new SqliteConnection(_connectionStringSqlite))
             {
@@ -38,20 +92,12 @@ namespace cli
                 {
                     return nodes;
                 }
-                if (parentNode.childrenCount < 100)
-                {
-
-                    foreach (var nodeId in parentNode.childrenIds)
-                    {
-                        nodes.Add(GetRedisValue(nodeId));
-                    }
-                    return nodes;
-                }
 
                 command.CommandText = $"SELECT * from n_node nn " +
-                    $"join n_relation nr on (nr.nn_children_id=nn.nn_id) " +
-                    $"WHERE nr.nn_parent_id in ({parentNode.childrenIdsString}) " +
-                    $"limit (SELECT sum(nn.nn_child_count) from n_node nn WHERE nn_id in ({parentNode.childrenIdsString}) limit ({parentNode.childrenCount}));";
+                    $"join n_relation nr on (nr.nn_parent_id=nn.nn_id) " +
+                    $"WHERE nr.nn_children_id in (" +
+                    $"SELECT nn_id from n_node nn join n_relation nr on (nr.nn_parent_id=nn.nn_id) WHERE nr.nn_children_id = {parentNode.ID}" +
+                    $") ;";
                 //Console.WriteLine(command.CommandText);
 
                 using (var reader = command.ExecuteReader())
@@ -66,10 +112,73 @@ namespace cli
                 }
             }
 
+            return nodes;
+        }
 
+        public static List<NodeModel> FindParentsOfAGivenNode(string nodeName)
+        {
+            var childNode = GetSingleNode(nodeName);
+            List<NodeModel> nodes = new List<NodeModel>();
+            using (var connection = new SqliteConnection(_connectionStringSqlite))
+            {
+                connection.Open();
+                var command = connection.CreateCommand();
 
+                command.CommandText = $"SELECT * from n_node nn " +
+                    $"join n_relation nr on (nr.nn_parent_id=nn.nn_id) " +
+                    $"WHERE nr.nn_children_id = ({childNode.ID});";
+                //Console.WriteLine(command.CommandText);
 
-            return null;
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var id = reader.GetInt32(0);
+                        var name = reader.GetString(1);
+                        //var childCouint = reader.GetInt32(2);
+                        nodes.Add(new NodeModel() { ID = id, Name = name });
+                    }
+                }
+            }
+
+            return nodes;
+        }
+
+        public static List<NodeModel> FindGrandChildrenOfAGivenNode(string nodeName)
+        {
+            var parentNode = GetSingleNode(nodeName);
+            List<NodeModel> nodes = new List<NodeModel>();
+            using (var connection = new SqliteConnection(_connectionStringSqlite))
+            {
+                connection.Open();
+                var command = connection.CreateCommand();
+
+                    if (parentNode.childrenCount == 0)
+                    {
+                        return nodes;
+                    }            
+
+                command.CommandText = $"SELECT * from n_node nn " +
+                    $"join n_relation nr on (nr.nn_children_id=nn.nn_id) " +
+                    $"WHERE nr.nn_parent_id in (" +
+                    $"SELECT nn_id from n_node nn join n_relation nr on (nr.nn_children_id=nn.nn_id) WHERE nr.nn_parent_id = {parentNode.ID} limit ({parentNode.childrenCount})" +
+                    $") " +
+                    $"limit (SELECT sum(nn.nn_child_count)  from n_node nn join n_relation nr on (nr.nn_children_id=nn.nn_id) WHERE nr.nn_parent_id = {parentNode.ID} limit ({parentNode.childrenCount}));";
+                //Console.WriteLine(command.CommandText);
+
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                        var id = reader.GetInt32(0);
+                        var name = reader.GetString(1);
+                        //var childCouint = reader.GetInt32(2);
+                        nodes.Add(new NodeModel() { ID = id, Name = name });
+                    }
+                }
+            }
+
+            return nodes;
         }
 
         public static List<NodeModel> GetChildrenOfANode(string nodeName)
@@ -180,7 +289,7 @@ namespace cli
                 }
 
                 keyValueRedisDictionary.Add(nodeModel.Name, $"{currentNodeModelID};{childrenCount};{string.Join(",", nodeModel.childrenIds)}");
-                keyValueRedisDictionary.Add("--"+nodeModel.ID.ToString(), $"{nodeModel.Name};{childrenCount};{string.Join(",", nodeModel.childrenIds)}");
+                keyValueRedisDictionary.Add("--" + nodeModel.ID.ToString(), $"{nodeModel.Name};{childrenCount};{string.Join(",", nodeModel.childrenIds)}");
 
                 if (i == 10000 || lastID == nodeModel.ID)
                 {
@@ -203,21 +312,21 @@ namespace cli
 
             var tasks = new List<Task>();
 
-            foreach (var insertQuery in insertNodeQueries)
-            {
-                tasks.Add(ExecuteInsertQueryAsync(insertQuery));
-            }
-            await Task.WhenAll(tasks);
-            tasks.Clear();
-            Console.WriteLine("Nodes insertion completed");
+            // foreach (var insertQuery in insertNodeQueries)
+            // {
+            //     tasks.Add(ExecuteInsertQueryAsync(insertQuery));
+            // }
+            // await Task.WhenAll(tasks);
+            // tasks.Clear();
+            // Console.WriteLine("Nodes insertion completed");
 
-            foreach (var insertQuery in insertRelationQueries)
-            {
-                tasks.Add(ExecuteInsertQueryAsync(insertQuery));
-            }
+            // foreach (var insertQuery in insertRelationQueries)
+            // {
+            //     tasks.Add(ExecuteInsertQueryAsync(insertQuery));
+            // }
 
-            await Task.WhenAll(tasks);
-            Console.WriteLine("Relations insertion completed");
+            // await Task.WhenAll(tasks);
+            // Console.WriteLine("Relations insertion completed");
 
             foreach (var dict in keyValueRedisDictionary)
             {
@@ -264,19 +373,27 @@ namespace cli
         }
         private static NodeModel GetRedisValue(string key)
         {
-            var parts = _redisDb.StringGet(key).ToString().Split(";");
-            if (parts.Length == 4)
+            try
             {
-                parts[0] = parts[0] + ";" + parts[1];
-                parts[1] = parts[2];
-                parts[2] = parts[3];
+                var parts = _redisDb.StringGet(key).ToString().Split(";");
+                if (parts.Length == 4)
+                {
+                    parts[0] = parts[0] + ";" + parts[1];
+                    parts[1] = parts[2];
+                    parts[2] = parts[3];
+                }
+                if (parts.Length == 0) return null;
+                int id = int.Parse(parts[0]);
+                int childrenCount = int.Parse(parts[1]);
+                string childrenIdsString = parts[2];
+                List<int> childrenIds = parts[2].Split(",").Select(x => int.Parse(x)).ToList();
+                return new NodeModel() { ID = id, childrenCount = childrenCount, childrenIdsString = childrenIdsString, childrenIds = childrenIds };
             }
-            if (parts.Length == 0) return null;
-            int id = int.Parse(parts[0]);
-            int childrenCount = int.Parse(parts[1]);
-            string childrenIdsString = parts[2];
-            List<int> childrenIds = parts[2].Split(",").Select(x => int.Parse(x)).ToList();
-            return new NodeModel() { ID = id, childrenCount = childrenCount, childrenIdsString = childrenIdsString, childrenIds = childrenIds };
+            catch (Exception)
+            {
+                return null;
+            }
+            
         }
         private static void RenameRedisKey(string oldKey, string newKey)
         {
