@@ -64,12 +64,18 @@
                 Console.WriteLine(string.Join(", ", nodes.Select(x => x.Name)));
             }
 
+            if (instructionNumber == 10)
+            {
+                var nodes = Database.NodeLeastChildren();
+                Console.WriteLine(string.Join(", ", nodes.Select(x => x.Name)));
+            }
+
 
             if (instructionNumber == 99)
             {
-               // Database.InitSqliteDatabase();
+                Database.InitSqliteDatabase();
                 //new Neo4jDatabase().InitNeo4jDatabase();
-                new CsvDataLoader().LoadCsvFile(firstArgument != "" ? firstArgument : "C:\\Users\\asus\\Desktop\\code\\databases\\cli\\taxonomy_iw.csv");
+                new CsvDataLoader().LoadCsvFile(firstArgument != "" ? firstArgument : "\\\\wsl.localhost\\Ubuntu\\home\\frecklle\\cliDataBases\\taxonomy_iw.csv");
             }
 
 

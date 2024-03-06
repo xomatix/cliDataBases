@@ -117,6 +117,34 @@ namespace cli
             return nodes;
         }
 
+        public static List<NodeModel> NodeLeastChildren()
+        {
+            List<NodeModel> nodesWithOneChild = new List<NodeModel>();
+            using (var connection = new SqliteConnection(_connectionStringSqlite))
+            {
+                connection.Open();
+                var command = connection.CreateCommand();
+
+                command.CommandText = @"
+            SELECT n1.nn_name
+            FROM n_node n1
+            WHERE n1.nn_child_count = 1";
+
+                using (var reader = command.ExecuteReader())
+                {
+                    while (reader.Read())
+                    {
+                
+                        var ParentName = reader.GetString(0);
+                        // You can add additional attributes based on your NodeModel definition
+                        nodesWithOneChild.Add(new NodeModel() { Name = ParentName});
+                    }
+                }
+            }
+            return nodesWithOneChild;
+        }
+
+
         public static void InitSqliteDatabase()
         {
             string databaseFilePath = new SqliteConnectionStringBuilder(_connectionStringSqlite).DataSource;
@@ -307,13 +335,7 @@ namespace cli
 
         }
 
-        //public static NodeModel ReadNodeModel()
-        //{
-        //    NodeModel nodeModel = new NodeModel();
-        //    nodeModel.ID = reader.GetInt32(reader.GetOrdinal("id"));
-        //    nodeModel.Name = reader.GetString(reader.GetOrdinal("name"));
-        //    nodeModel.childrenCount = reader.GetInt32(reader.GetOrdinal("nn_child_count"));
-        //    return nodeModel;
-        //}
+       
+
     }
 }
