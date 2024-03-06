@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using StackExchange.Redis;
 using System.Xml.Linq;
 using System.Threading;
+using System.Net.WebSockets;
+using Neo4j.Driver;
 
 namespace cli
 {
@@ -18,24 +20,56 @@ namespace cli
 
         public static int CountChildrenOfAGivenNode(string nodeName)
         {
-            var query = $"SELECT nn_child_count from n_node nn WHERE nn_name = '{nodeName}' limit 1";
+            var parentNode = GetRedisValue(nodeName);
+            return parentNode.childrenCount;
+        }
+
+        public static List<NodeModel> FindGrandChildrenOfAGivenNode(string nodeName)
+        {
+            var parentNode = GetRedisValue(nodeName);
+            var grandChildrenIds = new List<int>();
             List<NodeModel> nodes = new List<NodeModel>();
             using (var connection = new SqliteConnection(_connectionStringSqlite))
             {
                 connection.Open();
                 var command = connection.CreateCommand();
-                command.CommandText = query;
-                Console.WriteLine(command.CommandText);
+
+                if (parentNode.childrenCount == 0)
+                {
+                    return nodes;
+                }
+                if (parentNode.childrenCount < 100)
+                {
+
+                    foreach (var nodeId in parentNode.childrenIds)
+                    {
+                        nodes.Add(GetRedisValue(nodeId));
+                    }
+                    return nodes;
+                }
+
+                command.CommandText = $"SELECT * from n_node nn " +
+                    $"join n_relation nr on (nr.nn_children_id=nn.nn_id) " +
+                    $"WHERE nr.nn_parent_id in ({parentNode.childrenIdsString}) " +
+                    $"limit (SELECT sum(nn.nn_child_count) from n_node nn WHERE nn_id in ({parentNode.childrenIdsString}) limit ({parentNode.childrenCount}));";
+                //Console.WriteLine(command.CommandText);
 
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        return reader.GetInt32(0);
+                        var id = reader.GetInt32(0);
+                        var name = reader.GetString(1);
+                        //var childCouint = reader.GetInt32(2);
+                        nodes.Add(new NodeModel() { ID = id, Name = name });
                     }
                 }
             }
-            return 0;
+
+
+
+
+            return null;
         }
 
         public static List<NodeModel> GetChildrenOfANode(string nodeName)
@@ -46,16 +80,7 @@ namespace cli
                 connection.Open();
                 var command = connection.CreateCommand();
 
-                //var startTime = DateTime.Now;
                 var parentNode = GetRedisValue(nodeName);
-                //var endTime = DateTime.Now;
-
-                //var elapsedTime = endTime - startTime;
-                //double elapsedSeconds = elapsedTime.TotalSeconds;
-
-                //Console.WriteLine($"Redis Elapsed Time: {elapsedSeconds:F4} seconds , in elapsed unit : {elapsedTime}");
-
-
 
                 if (parentNode.childrenCount == 0)
                 {
@@ -155,7 +180,7 @@ namespace cli
                 }
 
                 keyValueRedisDictionary.Add(nodeModel.Name, $"{currentNodeModelID};{childrenCount};{string.Join(",", nodeModel.childrenIds)}");
-                keyValueRedisDictionary.Add(nodeModel.ID.ToString(), $"{nodeModel.Name};{childrenCount};{string.Join(",", nodeModel.childrenIds)}");
+                keyValueRedisDictionary.Add("--"+nodeModel.ID.ToString(), $"{nodeModel.Name};{childrenCount};{string.Join(",", nodeModel.childrenIds)}");
 
                 if (i == 10000 || lastID == nodeModel.ID)
                 {
@@ -212,7 +237,7 @@ namespace cli
         {
             try
             {
-                var parts = _redisDb.StringGet(key.ToString()).ToString().Split(";");
+                var parts = _redisDb.StringGet("--" + key.ToString()).ToString().Split(";");
                 if (parts.Length == 4)
                 {
                     parts[0] = parts[0] + ";" + parts[1];

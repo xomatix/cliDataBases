@@ -57,6 +57,12 @@
                 var nodes = Database.CountChildrenOfAGivenNode(firstArgument);
                 Console.WriteLine("Child nodes count: " + nodes);
             }
+            //3. fnds all grand children of a given node
+            if (instructionNumber == 3)
+            {
+                var nodes = Database.FindGrandChildrenOfAGivenNode(firstArgument);
+                Console.WriteLine(string.Join(", ", nodes.Select(x => x.Name)));
+            }
 
 
             if (instructionNumber == 99)
