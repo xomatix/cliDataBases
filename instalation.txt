@@ -21,3 +21,7 @@ redis-cli
 
 start redis
 sudo systemctl start redis-server
+
+if that doesnt work (start redis):
+sudo service redis-server start
+
