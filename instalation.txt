@@ -1,0 +1,23 @@
+
+for compilation
+sudo apt-get update &&   sudo apt-get install -y dotnet-sdk-8.0
+
+for database support pgsql
+dotnet add package Npgsql --version 8.0.2
+
+dotnet add package Microsoft.Data.Sqlite
+or without .Core
+
+
+for Neo4j
+dotnet add package Neo4j.Driver
+dotnet add package Microsoft.Data.Sqlite
+
+for redis
+sudo apt install redis-server
+dotnet add package StackExchange.Redis
+
+redis-cli
+
+start redis
+sudo systemctl start redis-server
